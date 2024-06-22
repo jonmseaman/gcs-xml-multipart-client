@@ -12,18 +12,6 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-type InitiateMultipartUploadRequest struct {
-	Bucket string
-	Key    string
-}
-
-type InitiateMultipartUploadResult struct {
-	XMLName  xml.Name `xml:"InitiateMultipartUploadResult"`
-	Bucket   string   `xml:"Bucket"`
-	Key      string   `xml:"Key"`
-	UploadID string   `xml:"UploadId"`
-}
-
 type multipartClient struct {
 	hc *http.Client
 }
@@ -35,7 +23,7 @@ func New(hc *http.Client) *multipartClient {
 }
 
 func checkResponse(resp *http.Response) error {
-	if resp.StatusCode == http.StatusOK {
+	if 200 <= resp.StatusCode && resp.StatusCode < 300 {
 		return nil
 	}
 	// Default to a basic message if there is no body.
@@ -51,6 +39,18 @@ func checkResponse(resp *http.Response) error {
 	}
 
 	return errors.New(errStr)
+}
+
+type InitiateMultipartUploadRequest struct {
+	Bucket string
+	Key    string
+}
+
+type InitiateMultipartUploadResult struct {
+	XMLName  xml.Name `xml:"InitiateMultipartUploadResult"`
+	Bucket   string   `xml:"Bucket"`
+	Key      string   `xml:"Key"`
+	UploadID string   `xml:"UploadId"`
 }
 
 // InitiateMultipartUpload calls the XML Multipart API to Inititate a Multipart Upload.
@@ -79,4 +79,29 @@ func (mpuc *multipartClient) InitiateMultipartUpload(ctx context.Context, req *I
 		return nil, fmt.Errorf("failed to parse XML body from HTTP response: %v. Response: %v", err, respStrBuilder.String())
 	}
 	return result, nil
+}
+
+type AbortMultipartUploadRequest struct {
+	Bucket   string `xml:"Bucket"`
+	Key      string `xml:"Key"`
+	UploadID string `xml:"UploadId"`
+}
+
+func (mpuc *multipartClient) AbortMultipartUpload(ctx context.Context, req *AbortMultipartUploadRequest) error {
+	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID)
+	httpReq, err := http.NewRequest("DELETE", url, http.NoBody)
+	if err != nil {
+		return err
+	}
+
+	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
+	defer googleapi.CloseBody(resp)
+	if err != nil {
+		return err
+	}
+	if err := checkResponse(resp); err != nil {
+		return err
+	}
+
+	return nil
 }

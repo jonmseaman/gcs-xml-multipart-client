@@ -34,42 +34,18 @@ func httpReqToStr(t *testing.T, req *http.Request) string {
 	return string(reqBytes)
 }
 
-// reqRecordingTransport intercepts a request and converts it to a string for testing.
-type reqRecordingTransport struct {
-	t   *testing.T
-	req string
-}
-
-func newReqRecordingTransport(t *testing.T) *reqRecordingTransport {
-	return &reqRecordingTransport{
-		t: t,
-	}
-}
-
-func (rrt *reqRecordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	rrt.t.Helper()
-	rrt.req = httpReqToStr(rrt.t, req)
-	return nil, errMock
-}
-
 type mockTransport struct {
-	t *testing.T
+	t               *testing.T
+	recordedHttpReq string
 	// Response to responsd with when RoundTrip is called.
-	resp *http.Response
+	respondWithHttp *http.Response
 	// Error to response with when RoundTrip is called.
-	err error
-}
-
-func newMockTransport(t *testing.T, resp *http.Response, err error) *mockTransport {
-	return &mockTransport{
-		t:    t,
-		resp: resp,
-		err:  err,
-	}
+	respondWithErr error
 }
 
 func (mt *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	return mt.resp, mt.err
+	mt.recordedHttpReq = httpReqToStr(mt.t, req)
+	return mt.respondWithHttp, mt.respondWithErr
 }
 
 func TestInititateMultipartUploadRequests(t *testing.T) {
@@ -96,7 +72,11 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		trans := newReqRecordingTransport(t)
+		trans := &mockTransport{
+			t:               t,
+			respondWithHttp: nil,
+			respondWithErr:  errMock,
+		}
 		hc := &http.Client{
 			Transport: trans,
 		}
@@ -106,7 +86,7 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 		if !strings.Contains(err.Error(), errMock.Error()) {
 			t.Fatal(err)
 		}
-		if diff := cmp.Diff(tc.wantHttpReq, trans.req, strCompareOpt); diff != "" {
+		if diff := cmp.Diff(tc.wantHttpReq, trans.recordedHttpReq, strCompareOpt); diff != "" {
 			t.Errorf("unexpected diff for http request: (-want, +got):\n%s", diff)
 		}
 	}
@@ -150,7 +130,11 @@ func TestInititateMultipartUploadResponse(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		trans := newMockTransport(t, tc.resp, nil)
+		trans := &mockTransport{
+			t:               t,
+			respondWithHttp: tc.resp,
+			respondWithErr:  nil,
+		}
 		hc := &http.Client{
 			Transport: trans,
 		}
@@ -164,4 +148,88 @@ func TestInititateMultipartUploadResponse(t *testing.T) {
 			t.Errorf("unexpected diff: (-want, +got):\n%s", diff)
 		}
 	}
+}
+
+func TestAbortMultipartUploads(t *testing.T) {
+	success := &http.Response{
+		Status:     http.StatusText(http.StatusNoContent),
+		StatusCode: http.StatusNoContent,
+	}
+	notFound := &http.Response{
+		Status:     http.StatusText(http.StatusNotFound),
+		StatusCode: http.StatusNotFound,
+	}
+
+	tests := []struct {
+		name        string
+		req         *AbortMultipartUploadRequest
+		wantHttpReq string
+		httpResp    *http.Response
+		wantResult  error
+	}{
+		{
+			name: "Abort with a success",
+			req: &AbortMultipartUploadRequest{
+				Bucket:   "bucket1",
+				Key:      "file1.txt",
+				UploadID: "my-upload-id",
+			},
+			wantHttpReq: "DELETE /bucket1/file1.txt?uploadId=my-upload-id HTTP/1.1\n" +
+				"Host: storage.googleapis.com\n\n",
+			httpResp:   success,
+			wantResult: nil,
+		},
+		{
+			name: "Abort with a not found error",
+			req: &AbortMultipartUploadRequest{
+				Bucket:   "bucket1",
+				Key:      "some/file/with/a/path/file1.txt",
+				UploadID: "my-upload-id",
+			},
+			wantHttpReq: "DELETE /bucket1/some/file/with/a/path/file1.txt?uploadId=my-upload-id HTTP/1.1\n" +
+				"Host: storage.googleapis.com\n\n",
+			httpResp:   notFound,
+			wantResult: errors.New("Not Found"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			trans := &mockTransport{
+				t:               t,
+				respondWithHttp: tc.httpResp,
+				respondWithErr:  nil,
+			}
+			hc := &http.Client{
+				Transport: trans,
+			}
+			mpuc := New(hc)
+			ctx := context.Background()
+			err := mpuc.AbortMultipartUpload(ctx, tc.req)
+
+			// Verify request.
+			if diff := cmp.Diff(tc.wantHttpReq, trans.recordedHttpReq, strCompareOpt); diff != "" {
+				t.Errorf("unexpected diff for http request: (-want, +got):\n%s", diff)
+			}
+
+			// Verify response.
+			if diff := cmp.Diff(tc.wantResult, err, compareErrorValues()); diff != "" {
+				t.Errorf("unexpected diff for abort result: (-want, +got):\n%s", diff)
+			}
+
+		})
+	}
+}
+
+func compareErrorValues() cmp.Option {
+	return cmp.Comparer(func(x error, y error) bool {
+		if x == y {
+			return true
+		}
+		if x != nil && y != nil {
+			return x.Error() == y.Error()
+		}
+
+		return false
+	})
 }
