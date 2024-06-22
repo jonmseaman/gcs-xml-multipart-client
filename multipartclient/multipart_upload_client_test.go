@@ -150,6 +150,19 @@ func TestInititateMultipartUploadResponse(t *testing.T) {
 	}
 }
 
+func compareErrorValues() cmp.Option {
+	return cmp.Comparer(func(x error, y error) bool {
+		if x == y {
+			return true
+		}
+		if x != nil && y != nil {
+			return x.Error() == y.Error()
+		}
+
+		return false
+	})
+}
+
 func TestAbortMultipartUploads(t *testing.T) {
 	success := &http.Response{
 		Status:     http.StatusText(http.StatusNoContent),
@@ -221,15 +234,95 @@ func TestAbortMultipartUploads(t *testing.T) {
 	}
 }
 
-func compareErrorValues() cmp.Option {
-	return cmp.Comparer(func(x error, y error) bool {
-		if x == y {
-			return true
-		}
-		if x != nil && y != nil {
-			return x.Error() == y.Error()
-		}
+func TestListMultipartUploads(t *testing.T) {
 
-		return false
-	})
+	listHttpResp := &http.Response{
+		Status:     http.StatusText(http.StatusOK),
+		StatusCode: http.StatusOK,
+		Body: strToReadCloser(`<?xml version="1.0" encoding="UTF-8"?>
+<ListMultipartUploadsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Bucket>travel-maps</Bucket>
+  <KeyMarker></KeyMarker>
+  <UploadIdMarker></UploadIdMarker>
+  <NextKeyMarker>cannes.jpeg</NextKeyMarker>
+  <NextUploadIdMarker>YW55IGlkZWEgd2h5IGVsdmluZydzIHVwbG9hZCBmYWlsZWQ</NextUploadIdMarker>
+  <MaxUploads>2</MaxUploads>
+  <IsTruncated>true</IsTruncated>
+  <Upload>
+    <Key>paris.jpeg</Key>
+    <UploadId>VXBsb2FkIElEIGZvciBlbHZpbmcncyBteS1tb3ZpZS5tMnRzIHVwbG9hZA</UploadId>
+    <StorageClass>STANDARD</StorageClass>
+    <Initiated>2021-11-10T20:48:33.000Z</Initiated>
+  </Upload>
+  <Upload>
+    <Key>tokyo.jpeg</Key>
+    <UploadId>YW55IGlkZWEgd2h5IGVsdmluZydzIHVwbG9hZCBmYWlsZWQ</UploadId>
+    <StorageClass>STANDARD</StorageClass>
+    <Initiated>2021-11-10T20:49:33.000Z</Initiated>
+  </Upload>
+</ListMultipartUploadsResult>`),
+	}
+	tests := []struct {
+		name          string
+		req           *ListMultipartUploadsRequest
+		wantHttpReq   string
+		httpResp      *http.Response
+		wantResult    *ListMultipartUploadsResult
+		wantResultErr error
+	}{
+		{
+			name: "List with a success",
+			req: &ListMultipartUploadsRequest{
+				Bucket: "bucket1",
+			},
+			wantHttpReq: "GET /bucket1/?uploads HTTP/1.1\n" +
+				"Host: storage.googleapis.com\n\n",
+			httpResp: listHttpResp,
+			wantResult: &ListMultipartUploadsResult{
+				Uploads: []ListUpload{
+					{
+						UploadID: "VXBsb2FkIElEIGZvciBlbHZpbmcncyBteS1tb3ZpZS5tMnRzIHVwbG9hZA",
+					},
+					{
+						UploadID: "YW55IGlkZWEgd2h5IGVsdmluZydzIHVwbG9hZCBmYWlsZWQ",
+					},
+				},
+			},
+			wantResultErr: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			trans := &mockTransport{
+				t:               t,
+				respondWithHttp: tc.httpResp,
+				respondWithErr:  nil,
+			}
+			hc := &http.Client{
+				Transport: trans,
+			}
+			mpuc := New(hc)
+			ctx := context.Background()
+			listResult, err := mpuc.ListMultipartUploads(ctx, tc.req)
+
+			// Verify request.
+			if diff := cmp.Diff(tc.wantHttpReq, trans.recordedHttpReq, strCompareOpt); diff != "" {
+				t.Errorf("unexpected diff for http request: (-want, +got):\n%s", diff)
+			}
+
+			// Verify response.
+			opts := []cmp.Option{
+				cmpopts.IgnoreFields(ListMultipartUploadsResult{}, "XMLName"),
+				cmpopts.IgnoreFields(ListUpload{}, "XMLName"),
+			}
+			if diff := cmp.Diff(tc.wantResult, listResult, opts...); diff != "" {
+				t.Errorf("unexpected diff for list result: (-want, +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantResultErr, err, compareErrorValues()); diff != "" {
+				t.Errorf("unexpected diff for error: (-want, +got):\n%s", diff)
+			}
+
+		})
+	}
 }

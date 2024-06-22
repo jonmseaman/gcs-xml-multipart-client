@@ -105,3 +105,43 @@ func (mpuc *multipartClient) AbortMultipartUpload(ctx context.Context, req *Abor
 
 	return nil
 }
+
+type ListMultipartUploadsRequest struct {
+	Bucket string
+}
+
+type ListUpload struct {
+	XMLName  xml.Name `xml:"Upload"`
+	UploadID string   `xml:"UploadId"`
+}
+type ListMultipartUploadsResult struct {
+	XMLName xml.Name     `xml:"ListMultipartUploadsResult"`
+	Uploads []ListUpload `xml:"Upload"`
+}
+
+func (mpuc *multipartClient) ListMultipartUploads(ctx context.Context, req *ListMultipartUploadsRequest) (*ListMultipartUploadsResult, error) {
+	url := fmt.Sprintf("https://storage.googleapis.com/%s/?uploads", req.Bucket)
+	httpReq, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
+	defer googleapi.CloseBody(resp)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	result := &ListMultipartUploadsResult{}
+	xml := xml.NewDecoder(resp.Body)
+	if err := xml.Decode(result); err != nil {
+		respStrBuilder := &strings.Builder{}
+		// strings.Builder.Write does not return errors.
+		_ = resp.Write(respStrBuilder)
+		return nil, fmt.Errorf("failed to parse XML body from HTTP response: %v. Response: %v", err, respStrBuilder.String())
+	}
+	return result, nil
+}
