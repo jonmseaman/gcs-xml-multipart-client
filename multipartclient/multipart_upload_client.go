@@ -81,6 +81,33 @@ func (mpuc *multipartClient) InitiateMultipartUpload(ctx context.Context, req *I
 	return result, nil
 }
 
+type UploadObjectPartRequest struct {
+	Bucket     string
+	Key        string
+	PartNumber int
+	UploadID   string
+	Body       io.ReadCloser
+}
+
+func (mpuc *multipartClient) UploadObjectPart(ctx context.Context, req *UploadObjectPartRequest) error {
+	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?partNumber=%v&uploadId=%s", req.Bucket, req.Key, req.PartNumber, req.UploadID)
+	httpReq, err := http.NewRequest(http.MethodPut, url, req.Body)
+	if err != nil {
+		return err
+	}
+
+	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
+	defer googleapi.CloseBody(resp)
+	if err != nil {
+		return err
+	}
+	if err := checkResponse(resp); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type AbortMultipartUploadRequest struct {
 	Bucket   string `xml:"Bucket"`
 	Key      string `xml:"Key"`

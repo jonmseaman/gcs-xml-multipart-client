@@ -163,6 +163,82 @@ func compareErrorValues() cmp.Option {
 	})
 }
 
+func TestUploadObjectPart(t *testing.T) {
+	tests := []struct {
+		name          string
+		req           *UploadObjectPartRequest
+		wantHttpReq   string
+		httpResp      *http.Response
+		wantResultErr error
+	}{
+		{
+			name: "Upload part success",
+			req: &UploadObjectPartRequest{
+				Bucket:     "bucket1",
+				Key:        "object.txt",
+				PartNumber: 2,
+				UploadID:   "my-upload-id",
+				Body:       strToReadCloser("part contents"),
+			},
+			wantHttpReq: "PUT /bucket1/object.txt?partNumber=2&uploadId=my-upload-id HTTP/1.1\n" +
+				"Host: storage.googleapis.com\n\n" +
+				"part contents",
+			httpResp: &http.Response{
+				Status:     http.StatusText(http.StatusOK),
+				StatusCode: http.StatusOK,
+				Body:       http.NoBody,
+			},
+			wantResultErr: nil,
+		},
+		{
+			name: "Upload part 404 error",
+			req: &UploadObjectPartRequest{
+				Bucket:     "bucket1",
+				Key:        "object.txt",
+				PartNumber: 2,
+				UploadID:   "my-upload-id",
+				Body:       strToReadCloser("part contents"),
+			},
+			wantHttpReq: "PUT /bucket1/object.txt?partNumber=2&uploadId=my-upload-id HTTP/1.1\n" +
+				"Host: storage.googleapis.com\n\n" +
+				"part contents",
+			httpResp: &http.Response{
+				Status:     http.StatusText(http.StatusNotFound),
+				StatusCode: http.StatusNotFound,
+				Body:       strToReadCloser("Bucket not found."),
+			},
+			wantResultErr: errors.New("Bucket not found."),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			trans := &mockTransport{
+				t:               t,
+				respondWithHttp: tc.httpResp,
+				respondWithErr:  nil,
+			}
+			hc := &http.Client{
+				Transport: trans,
+			}
+			mpuc := New(hc)
+			ctx := context.Background()
+			err := mpuc.UploadObjectPart(ctx, tc.req)
+
+			// Verify request.
+			if diff := cmp.Diff(tc.wantHttpReq, trans.recordedHttpReq, strCompareOpt); diff != "" {
+				t.Errorf("unexpected diff for http request: (-want, +got):\n%s", diff)
+			}
+
+			// Verify response.
+			if diff := cmp.Diff(tc.wantResultErr, err, compareErrorValues()); diff != "" {
+				t.Errorf("unexpected diff for error: (-want, +got):\n%s", diff)
+			}
+
+		})
+	}
+}
+
 func TestAbortMultipartUploads(t *testing.T) {
 	success := &http.Response{
 		Status:     http.StatusText(http.StatusNoContent),
