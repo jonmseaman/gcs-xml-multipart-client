@@ -114,12 +114,12 @@ func TestInititateMultipartUploadResponse(t *testing.T) {
 					"Content-Type": []string{"application/xml"},
 					"Date":         []string{"Wed, 24 Mar 2021 18:11:53 GMT"},
 				},
-				Body: toBody(`<?xml version="1.0" encoding="UTF-8"?>
-					<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-					  <Bucket>travel-maps</Bucket>
-					  <Key>paris.jpg</Key>
-					  <UploadId>VXBsb2FkIElEIGZvciBlbHZpbmcncyBteS1tb3ZpZS5tMnRzIHVwbG9hZA</UploadId>
-					</InitiateMultipartUploadResult>`),
+				Body: toBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+					"<InitiateMultipartUploadResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\n" +
+					"  <Bucket>travel-maps</Bucket>\n" +
+					"  <Key>paris.jpg</Key>\n" +
+					"  <UploadId>VXBsb2FkIElEIGZvciBlbHZpbmcncyBteS1tb3ZpZS5tMnRzIHVwbG9hZA</UploadId>\n" +
+					"</InitiateMultipartUploadResult>"),
 			},
 			wantParsed: &InitiateMultipartUploadResult{
 				Bucket:   "travel-maps",
@@ -393,33 +393,6 @@ func TestAbortMultipartUploads(t *testing.T) {
 }
 
 func TestListMultipartUploads(t *testing.T) {
-
-	listHttpResp := &http.Response{
-		Status:     http.StatusText(http.StatusOK),
-		StatusCode: http.StatusOK,
-		Body: toBody(`<?xml version="1.0" encoding="UTF-8"?>
-<ListMultipartUploadsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-  <Bucket>travel-maps</Bucket>
-  <KeyMarker></KeyMarker>
-  <UploadIdMarker></UploadIdMarker>
-  <NextKeyMarker>cannes.jpeg</NextKeyMarker>
-  <NextUploadIdMarker>YW55IGlkZWEgd2h5IGVsdmluZydzIHVwbG9hZCBmYWlsZWQ</NextUploadIdMarker>
-  <MaxUploads>2</MaxUploads>
-  <IsTruncated>true</IsTruncated>
-  <Upload>
-    <Key>paris.jpeg</Key>
-    <UploadId>VXBsb2FkIElEIGZvciBlbHZpbmcncyBteS1tb3ZpZS5tMnRzIHVwbG9hZA</UploadId>
-    <StorageClass>STANDARD</StorageClass>
-    <Initiated>2021-11-10T20:48:33.000Z</Initiated>
-  </Upload>
-  <Upload>
-    <Key>tokyo.jpeg</Key>
-    <UploadId>YW55IGlkZWEgd2h5IGVsdmluZydzIHVwbG9hZCBmYWlsZWQ</UploadId>
-    <StorageClass>STANDARD</StorageClass>
-    <Initiated>2021-11-10T20:49:33.000Z</Initiated>
-  </Upload>
-</ListMultipartUploadsResult>`),
-	}
 	tests := []struct {
 		name          string
 		req           *ListMultipartUploadsRequest
@@ -435,7 +408,32 @@ func TestListMultipartUploads(t *testing.T) {
 			},
 			wantHttpReq: "GET /bucket1/?uploads HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n\n",
-			httpResp: listHttpResp,
+			httpResp: &http.Response{
+				Status:     http.StatusText(http.StatusOK),
+				StatusCode: http.StatusOK,
+				Body: toBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+					"<ListMultipartUploadsResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\n" +
+					"  <Bucket>travel-maps</Bucket>\n" +
+					"  <KeyMarker></KeyMarker>\n" +
+					"  <UploadIdMarker></UploadIdMarker>\n" +
+					"  <NextKeyMarker>cannes.jpeg</NextKeyMarker>\n" +
+					"  <NextUploadIdMarker>YW55IGlkZWEgd2h5IGVsdmluZydzIHVwbG9hZCBmYWlsZWQ</NextUploadIdMarker>\n" +
+					"  <MaxUploads>2</MaxUploads>\n" +
+					"  <IsTruncated>true</IsTruncated>\n" +
+					"  <Upload>\n" +
+					"    <Key>paris.jpeg</Key>\n" +
+					"    <UploadId>VXBsb2FkIElEIGZvciBlbHZpbmcncyBteS1tb3ZpZS5tMnRzIHVwbG9hZA</UploadId>\n" +
+					"    <StorageClass>STANDARD</StorageClass>\n" +
+					"    <Initiated>2021-11-10T20:48:33.000Z</Initiated>\n" +
+					"  </Upload>\n" +
+					"  <Upload>\n" +
+					"    <Key>tokyo.jpeg</Key>\n" +
+					"    <UploadId>YW55IGlkZWEgd2h5IGVsdmluZydzIHVwbG9hZCBmYWlsZWQ</UploadId>\n" +
+					"    <StorageClass>STANDARD</StorageClass>\n" +
+					"    <Initiated>2021-11-10T20:49:33.000Z</Initiated>\n" +
+					"  </Upload>\n" +
+					"</ListMultipartUploadsResult>\n"),
+			},
 			wantResult: &ListMultipartUploadsResult{
 				Uploads: []ListUpload{
 					{
