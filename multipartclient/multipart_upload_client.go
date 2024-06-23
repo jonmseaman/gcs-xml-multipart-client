@@ -108,6 +108,55 @@ func (mpuc *multipartClient) UploadObjectPart(ctx context.Context, req *UploadOb
 	return nil
 }
 
+type CompletePart struct {
+	PartNumber int `xml:"PartNumber"`
+}
+
+type CompleteMultipartUploadBody struct {
+	XMLName xml.Name `xml:"CompleteMultipartUpload"`
+	Parts   []CompletePart
+}
+
+type CompleteMultipartUploadRequest struct {
+	Bucket   string
+	Key      string
+	UploadID string
+	Body     CompleteMultipartUploadBody
+}
+
+type CompleteMultipartUploadResult struct {
+	XMLName xml.Name `xml:"CompleteMultipartUploadResult"`
+}
+
+func (mpuc *multipartClient) CompleteMultipartUpload(ctx context.Context, req *CompleteMultipartUploadRequest) (*CompleteMultipartUploadResult, error) {
+	xmlBody := &strings.Builder{}
+	encoder := xml.NewEncoder(xmlBody)
+	encoder.Indent("", "  ")
+	err := encoder.Encode(req.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID)
+	httpBody := io.NopCloser(strings.NewReader(xmlBody.String()))
+	httpReq, err := http.NewRequest(http.MethodPost, url, httpBody)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
+	defer googleapi.CloseBody(resp)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	result := &CompleteMultipartUploadResult{}
+	return result, nil
+}
+
 type AbortMultipartUploadRequest struct {
 	Bucket   string `xml:"Bucket"`
 	Key      string `xml:"Key"`
