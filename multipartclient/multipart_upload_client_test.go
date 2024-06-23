@@ -92,7 +92,7 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 	}
 }
 
-func strToReadCloser(str string) io.ReadCloser {
+func toBody(str string) io.ReadCloser {
 	return io.NopCloser(strings.NewReader(str))
 }
 
@@ -114,7 +114,7 @@ func TestInititateMultipartUploadResponse(t *testing.T) {
 					"Content-Type": []string{"application/xml"},
 					"Date":         []string{"Wed, 24 Mar 2021 18:11:53 GMT"},
 				},
-				Body: strToReadCloser(`<?xml version="1.0" encoding="UTF-8"?>
+				Body: toBody(`<?xml version="1.0" encoding="UTF-8"?>
 					<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
 					  <Bucket>travel-maps</Bucket>
 					  <Key>paris.jpg</Key>
@@ -178,7 +178,7 @@ func TestUploadObjectPart(t *testing.T) {
 				Key:        "object.txt",
 				PartNumber: 2,
 				UploadID:   "my-upload-id",
-				Body:       strToReadCloser("part contents"),
+				Body:       toBody("part contents"),
 			},
 			wantHttpReq: "PUT /bucket1/object.txt?partNumber=2&uploadId=my-upload-id HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n\n" +
@@ -197,7 +197,7 @@ func TestUploadObjectPart(t *testing.T) {
 				Key:        "object.txt",
 				PartNumber: 2,
 				UploadID:   "my-upload-id",
-				Body:       strToReadCloser("part contents"),
+				Body:       toBody("part contents"),
 			},
 			wantHttpReq: "PUT /bucket1/object.txt?partNumber=2&uploadId=my-upload-id HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n\n" +
@@ -205,7 +205,7 @@ func TestUploadObjectPart(t *testing.T) {
 			httpResp: &http.Response{
 				Status:     http.StatusText(http.StatusNotFound),
 				StatusCode: http.StatusNotFound,
-				Body:       strToReadCloser("Bucket not found."),
+				Body:       toBody("Bucket not found."),
 			},
 			wantResultErr: errors.New("Bucket not found."),
 		},
@@ -397,7 +397,7 @@ func TestListMultipartUploads(t *testing.T) {
 	listHttpResp := &http.Response{
 		Status:     http.StatusText(http.StatusOK),
 		StatusCode: http.StatusOK,
-		Body: strToReadCloser(`<?xml version="1.0" encoding="UTF-8"?>
+		Body: toBody(`<?xml version="1.0" encoding="UTF-8"?>
 <ListMultipartUploadsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
   <Bucket>travel-maps</Bucket>
   <KeyMarker></KeyMarker>
@@ -476,6 +476,87 @@ func TestListMultipartUploads(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.wantResult, listResult, opts...); diff != "" {
 				t.Errorf("unexpected diff for list result: (-want, +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantResultErr, err, compareErrorValues()); diff != "" {
+				t.Errorf("unexpected diff for error: (-want, +got):\n%s", diff)
+			}
+
+		})
+	}
+}
+
+func TestListObjectParts(t *testing.T) {
+	tests := []struct {
+		name          string
+		req           *ListObjectPartsRequest
+		wantHttpReq   string
+		httpResp      *http.Response
+		wantResult    *ListObjectPartsResult
+		wantResultErr error
+	}{
+		{
+
+			name: "Successful request",
+			req: &ListObjectPartsRequest{
+				Bucket:   "test-bucket",
+				Key:      "object.txt",
+				UploadID: "test-upload-id",
+			},
+
+			wantHttpReq: "GET /test-bucket/object.txt?uploadId=test-upload-id HTTP/1.1\n" +
+				"Host: storage.googleapis.com\n\n",
+			httpResp: &http.Response{
+				Status:     http.StatusText(http.StatusOK),
+				StatusCode: http.StatusOK,
+				Body: toBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+					"<ListPartsResult>\n" +
+					"  <Parts>\n" +
+					"    <PartNumber>1</PartNumber>\n" +
+					"  </Parts>\n" +
+					"  <Parts>\n" +
+					"    <PartNumber>2</PartNumber>\n" +
+					"  </Parts>\n" +
+					"</ListPartsResult>"),
+			},
+			wantResult: &ListObjectPartsResult{
+				Parts: []CompletePart{
+					{
+						PartNumber: 1,
+					},
+					{
+						PartNumber: 2,
+					},
+				},
+			},
+			wantResultErr: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			trans := &mockTransport{
+				t:               t,
+				respondWithHttp: tc.httpResp,
+				respondWithErr:  nil,
+			}
+			hc := &http.Client{
+				Transport: trans,
+			}
+			mpuc := New(hc)
+			ctx := context.Background()
+			result, err := mpuc.ListObjectParts(ctx, tc.req)
+
+			// Verify request.
+			if diff := cmp.Diff(tc.wantHttpReq, trans.recordedHttpReq, strCompareOpt); diff != "" {
+				t.Errorf("unexpected diff for http request: (-want, +got):\n%s", diff)
+			}
+
+			// Verify response.
+			opts := []cmp.Option{
+				cmpopts.IgnoreFields(CompleteMultipartUploadResult{}, "XMLName"),
+			}
+			if diff := cmp.Diff(tc.wantResult, result, opts...); diff != "" {
+				t.Errorf("unexpected diff for result: (-want, +got):\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.wantResultErr, err, compareErrorValues()); diff != "" {
 				t.Errorf("unexpected diff for error: (-want, +got):\n%s", diff)

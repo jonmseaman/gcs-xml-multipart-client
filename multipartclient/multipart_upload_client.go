@@ -221,3 +221,40 @@ func (mpuc *multipartClient) ListMultipartUploads(ctx context.Context, req *List
 	}
 	return result, nil
 }
+
+type ListObjectPartsRequest struct {
+	Bucket   string
+	Key      string
+	UploadID string
+}
+
+type ListObjectPartsResult struct {
+	Parts []CompletePart
+}
+
+func (mpuc *multipartClient) ListObjectParts(ctx context.Context, req *ListObjectPartsRequest) (*ListObjectPartsResult, error) {
+	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID)
+	httpReq, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
+	defer googleapi.CloseBody(resp)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	result := &ListObjectPartsResult{}
+	xml := xml.NewDecoder(resp.Body)
+	if err := xml.Decode(result); err != nil {
+		respStrBuilder := &strings.Builder{}
+		// strings.Builder.Write does not return errors.
+		_ = resp.Write(respStrBuilder)
+		return nil, fmt.Errorf("failed to parse XML body from HTTP response: %v. Response: %v", err, respStrBuilder.String())
+	}
+	return result, nil
+}
