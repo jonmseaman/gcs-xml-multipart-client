@@ -12,12 +12,15 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-type multipartClient struct {
+// Client for using GCS XML Multipart API:
+// https://cloud.google.com/storage/docs/multipart-uploads
+type MultipartClient struct {
 	hc *http.Client
 }
 
-func New(hc *http.Client) *multipartClient {
-	return &multipartClient{
+// Create a multipart client that uses the specified http.Client.
+func New(hc *http.Client) *MultipartClient {
+	return &MultipartClient{
 		hc: hc,
 	}
 }
@@ -41,11 +44,17 @@ func checkResponse(resp *http.Response) error {
 	return errors.New(errStr)
 }
 
+// Initiate Multipart Upload Request
+// https://cloud.google.com/storage/docs/xml-api/post-object-multipart
 type InitiateMultipartUploadRequest struct {
 	Bucket string
 	Key    string
+
+	CustomMetadata map[string]string
 }
 
+// Initiate Multipart Upload Response
+// https://cloud.google.com/storage/docs/xml-api/post-object-multipart
 type InitiateMultipartUploadResult struct {
 	XMLName  xml.Name `xml:"InitiateMultipartUploadResult"`
 	Bucket   string   `xml:"Bucket"`
@@ -54,11 +63,16 @@ type InitiateMultipartUploadResult struct {
 }
 
 // InitiateMultipartUpload calls the XML Multipart API to Inititate a Multipart Upload.
-func (mpuc *multipartClient) InitiateMultipartUpload(ctx context.Context, req *InitiateMultipartUploadRequest) (*InitiateMultipartUploadResult, error) {
+func (mpuc *MultipartClient) InitiateMultipartUpload(ctx context.Context, req *InitiateMultipartUploadRequest) (*InitiateMultipartUploadResult, error) {
 	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploads", req.Bucket, req.Key)
 	httpReq, err := http.NewRequest("POST", url, http.NoBody)
 	if err != nil {
 		return nil, err
+	}
+
+	// Add custom metadata:
+	for key, value := range req.CustomMetadata {
+		httpReq.Header.Add(fmt.Sprintf("x-goog-meta-%s", key), value)
 	}
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
@@ -82,14 +96,19 @@ func (mpuc *multipartClient) InitiateMultipartUpload(ctx context.Context, req *I
 }
 
 type UploadObjectPartRequest struct {
+	// Query string parameters
 	Bucket     string
 	Key        string
 	PartNumber int
 	UploadID   string
-	Body       io.ReadCloser
+
+	// Object body part contents.
+	Body io.ReadCloser
 }
 
-func (mpuc *multipartClient) UploadObjectPart(ctx context.Context, req *UploadObjectPartRequest) error {
+// Upload an object part request.
+// https://cloud.google.com/storage/docs/xml-api/put-object-multipart
+func (mpuc *MultipartClient) UploadObjectPart(ctx context.Context, req *UploadObjectPartRequest) error {
 	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?partNumber=%v&uploadId=%s", req.Bucket, req.Key, req.PartNumber, req.UploadID)
 	httpReq, err := http.NewRequest(http.MethodPut, url, req.Body)
 	if err != nil {
@@ -109,7 +128,9 @@ func (mpuc *multipartClient) UploadObjectPart(ctx context.Context, req *UploadOb
 }
 
 type CompletePart struct {
-	PartNumber int `xml:"PartNumber"`
+	XMLName    xml.Name `xml:"Part"`
+	PartNumber int      `xml:"PartNumber"`
+	Etag       string   `xml:"ETag"`
 }
 
 type CompleteMultipartUploadBody struct {
@@ -117,6 +138,7 @@ type CompleteMultipartUploadBody struct {
 	Parts   []CompletePart
 }
 
+// TODO: Add header support.
 type CompleteMultipartUploadRequest struct {
 	Bucket   string
 	Key      string
@@ -125,10 +147,21 @@ type CompleteMultipartUploadRequest struct {
 }
 
 type CompleteMultipartUploadResult struct {
-	XMLName xml.Name `xml:"CompleteMultipartUploadResult"`
+	XMLName  xml.Name `xml:"CompleteMultipartUploadResult"`
+	Location string   `xml:"Location"`
+	Bucket   string   `xml:"Bucket"`
+	Key      string   `xml:"Key"`
+	Etag     string   `xml:"ETag"`
 }
 
-func (mpuc *multipartClient) CompleteMultipartUpload(ctx context.Context, req *CompleteMultipartUploadRequest) (*CompleteMultipartUploadResult, error) {
+type CompleteMultipartUploadResponse struct {
+	Result CompleteMultipartUploadResult
+	Hash   string
+}
+
+// Complete a multipart upload.
+// https://cloud.google.com/storage/docs/xml-api/post-object-complete
+func (mpuc *MultipartClient) CompleteMultipartUpload(ctx context.Context, req *CompleteMultipartUploadRequest) (*CompleteMultipartUploadResult, error) {
 	xmlBody := &strings.Builder{}
 	encoder := xml.NewEncoder(xmlBody)
 	encoder.Indent("", "  ")
@@ -138,11 +171,14 @@ func (mpuc *multipartClient) CompleteMultipartUpload(ctx context.Context, req *C
 	}
 
 	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID)
-	httpBody := io.NopCloser(strings.NewReader(xmlBody.String()))
+	strBody := xmlBody.String()
+	httpBody := io.NopCloser(strings.NewReader(strBody))
 	httpReq, err := http.NewRequest(http.MethodPost, url, httpBody)
 	if err != nil {
 		return nil, err
 	}
+
+	httpReq.Header["ContentLength"] = []string{fmt.Sprint(len(strBody))}
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)
@@ -163,7 +199,9 @@ type AbortMultipartUploadRequest struct {
 	UploadID string `xml:"UploadId"`
 }
 
-func (mpuc *multipartClient) AbortMultipartUpload(ctx context.Context, req *AbortMultipartUploadRequest) error {
+// Abort multipart upload.
+// https://cloud.google.com/storage/docs/xml-api/delete-multipart
+func (mpuc *MultipartClient) AbortMultipartUpload(ctx context.Context, req *AbortMultipartUploadRequest) error {
 	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID)
 	httpReq, err := http.NewRequest("DELETE", url, http.NoBody)
 	if err != nil {
@@ -186,16 +224,26 @@ type ListMultipartUploadsRequest struct {
 	Bucket string
 }
 
+// TODO: Support headers
 type ListUpload struct {
 	XMLName  xml.Name `xml:"Upload"`
 	UploadID string   `xml:"UploadId"`
 }
+
+// TODO: Support response body elements:
+// - KeyMarker
+// - UploadIdMarker
+// - NextKeyMarker
+// - etc
+// - https://cloud.google.com/storage/docs/xml-api/get-bucket-uploads
 type ListMultipartUploadsResult struct {
 	XMLName xml.Name     `xml:"ListMultipartUploadsResult"`
 	Uploads []ListUpload `xml:"Upload"`
 }
 
-func (mpuc *multipartClient) ListMultipartUploads(ctx context.Context, req *ListMultipartUploadsRequest) (*ListMultipartUploadsResult, error) {
+// List Multipart Uploads
+// https://cloud.google.com/storage/docs/xml-api/get-bucket-uploads
+func (mpuc *MultipartClient) ListMultipartUploads(ctx context.Context, req *ListMultipartUploadsRequest) (*ListMultipartUploadsResult, error) {
 	url := fmt.Sprintf("https://storage.googleapis.com/%s/?uploads", req.Bucket)
 	httpReq, err := http.NewRequest(http.MethodGet, url, http.NoBody)
 	if err != nil {
@@ -229,10 +277,12 @@ type ListObjectPartsRequest struct {
 }
 
 type ListObjectPartsResult struct {
-	Parts []CompletePart
+	Parts []CompletePart `xml:"Part"`
 }
 
-func (mpuc *multipartClient) ListObjectParts(ctx context.Context, req *ListObjectPartsRequest) (*ListObjectPartsResult, error) {
+// List Object Parts
+// https://cloud.google.com/storage/docs/xml-api/get-object-multipart
+func (mpuc *MultipartClient) ListObjectParts(ctx context.Context, req *ListObjectPartsRequest) (*ListObjectPartsResult, error) {
 	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID)
 	httpReq, err := http.NewRequest(http.MethodGet, url, http.NoBody)
 	if err != nil {

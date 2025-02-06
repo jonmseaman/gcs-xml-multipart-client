@@ -69,6 +69,21 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 			wantHttpReq: "POST /bucket1/some/file/with/a/path/file1.txt?uploads HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n\n",
 		},
+		{
+			req: &InitiateMultipartUploadRequest{
+				Bucket: "bucket1",
+				Key:    "some/file/with/a/path/file1.txt",
+				CustomMetadata: map[string]string{
+					"mtime": "Saturday",
+					"ctime": "Friday",
+				},
+			},
+			wantHttpReq: "POST /bucket1/some/file/with/a/path/file1.txt?uploads HTTP/1.1\n" +
+				"Host: storage.googleapis.com\n" +
+				"X-Goog-Meta-Ctime: Friday\n" +
+				"X-Goog-Meta-Mtime: Saturday\n" +
+				"\n",
+		},
 	}
 
 	for _, tc := range tests {
@@ -259,9 +274,11 @@ func TestCompleteMultipartUpload(t *testing.T) {
 					Parts: []CompletePart{
 						{
 							PartNumber: 1,
+							Etag:       "etagpart1",
 						},
 						{
 							PartNumber: 2,
+							Etag:       "etagpart2",
 						},
 					},
 				},
@@ -269,14 +286,17 @@ func TestCompleteMultipartUpload(t *testing.T) {
 
 			wantHttpReq: "POST /test-bucket/object.txt?uploadId=test-upload-id HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
+				"ContentLength: 206\n" +
 				"\n" +
 				"<CompleteMultipartUpload>\n" +
-				"  <Parts>\n" +
+				"  <Part>\n" +
 				"    <PartNumber>1</PartNumber>\n" +
-				"  </Parts>\n" +
-				"  <Parts>\n" +
+				"    <ETag>etagpart1</ETag>\n" +
+				"  </Part>\n" +
+				"  <Part>\n" +
 				"    <PartNumber>2</PartNumber>\n" +
-				"  </Parts>\n" +
+				"    <ETag>etagpart2</ETag>\n" +
+				"  </Part>\n" +
 				"</CompleteMultipartUpload>",
 			httpResp: &http.Response{
 				Status:     http.StatusText(http.StatusOK),
@@ -508,12 +528,12 @@ func TestListObjectParts(t *testing.T) {
 				StatusCode: http.StatusOK,
 				Body: toBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
 					"<ListPartsResult>\n" +
-					"  <Parts>\n" +
+					"  <Part>\n" +
 					"    <PartNumber>1</PartNumber>\n" +
-					"  </Parts>\n" +
-					"  <Parts>\n" +
+					"  </Part>\n" +
+					"  <Part>\n" +
 					"    <PartNumber>2</PartNumber>\n" +
-					"  </Parts>\n" +
+					"  </Part>\n" +
 					"</ListPartsResult>"),
 			},
 			wantResult: &ListObjectPartsResult{
@@ -551,7 +571,7 @@ func TestListObjectParts(t *testing.T) {
 
 			// Verify response.
 			opts := []cmp.Option{
-				cmpopts.IgnoreFields(CompleteMultipartUploadResult{}, "XMLName"),
+				cmpopts.IgnoreFields(CompletePart{}, "XMLName"),
 			}
 			if diff := cmp.Diff(tc.wantResult, result, opts...); diff != "" {
 				t.Errorf("unexpected diff for result: (-want, +got):\n%s", diff)
