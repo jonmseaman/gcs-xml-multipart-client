@@ -241,6 +241,53 @@ func TestUploadObjectPart(t *testing.T) {
 			},
 			wantResultErr: errors.New("Bucket not found."),
 		},
+		{
+			name: "Upload part with md5",
+			req: &UploadObjectPartRequest{
+				Bucket:     "bucket1",
+				Key:        "object.txt",
+				PartNumber: 2,
+				UploadID:   "my-upload-id",
+				Body:       toBody("part contents"),
+				MD5:        "d41d8cd98f00b204e9800998ecf8427e",
+			},
+			wantHttpReq: "PUT /bucket1/object.txt?partNumber=2&uploadId=my-upload-id HTTP/1.1\n" +
+				"Host: storage.googleapis.com\n" +
+				"Content-MD5: d41d8cd98f00b204e9800998ecf8427e\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
+				"X-Goog-Hash: md5=d41d8cd98f00b204e9800998ecf8427e\n" +
+				"\n" +
+				"part contents",
+			httpResp: &http.Response{
+				Status:     http.StatusText(http.StatusOK),
+				StatusCode: http.StatusOK,
+				Body:       http.NoBody,
+			},
+			wantResultErr: nil,
+		},
+		{
+			name: "Upload part with crc32c",
+			req: &UploadObjectPartRequest{
+				Bucket:     "bucket1",
+				Key:        "object.txt",
+				PartNumber: 2,
+				UploadID:   "my-upload-id",
+				Body:       toBody("part contents"),
+				CRC32C:     "n03x6A==",
+			},
+			wantHttpReq: "PUT /bucket1/object.txt?partNumber=2&uploadId=my-upload-id HTTP/1.1\n" +
+				"Host: storage.googleapis.com\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
+				"X-Goog-Hash: crc32c=n03x6A==\n" +
+				"\n" +
+				"part contents",
+			httpResp: &http.Response{
+				Status:     http.StatusText(http.StatusOK),
+				StatusCode: http.StatusOK,
+				Body:       http.NoBody,
+			},
+			wantResultErr: nil,
+		},
 	}
 
 	for _, tc := range tests {

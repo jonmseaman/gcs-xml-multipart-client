@@ -107,6 +107,10 @@ type UploadObjectPartRequest struct {
 	PartNumber int
 	UploadID   string
 
+	// Headers
+	CRC32C string
+	MD5    string
+
 	// Object body part contents.
 	Body io.ReadCloser
 }
@@ -121,6 +125,14 @@ func (mpuc *MultipartClient) UploadObjectPart(ctx context.Context, req *UploadOb
 	}
 	// Date is a required header.
 	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
+
+	if req.MD5 != "" {
+		httpReq.Header["Content-MD5"] = []string{req.MD5}
+		httpReq.Header.Add("X-Goog-Hash", fmt.Sprintf("md5=%s", req.MD5))
+	}
+	if req.CRC32C != "" {
+		httpReq.Header.Add("X-Goog-Hash", fmt.Sprintf("crc32c=%s", req.CRC32C))
+	}
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)
