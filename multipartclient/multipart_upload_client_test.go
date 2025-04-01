@@ -476,12 +476,23 @@ func TestListMultipartUploads(t *testing.T) {
 					"</ListMultipartUploadsResult>\n"),
 			},
 			wantResult: &ListMultipartUploadsResult{
+				Bucket:             "travel-maps",
+				NextKeyMarker:      "cannes.jpeg",
+				NextUploadIdMarker: "YW55IGlkZWEgd2h5IGVsdmluZydzIHVwbG9hZCBmYWlsZWQ",
+				MaxUploads:         2,
+				IsTruncated:        true,
 				Uploads: []ListUpload{
 					{
-						UploadID: "VXBsb2FkIElEIGZvciBlbHZpbmcncyBteS1tb3ZpZS5tMnRzIHVwbG9hZA",
+						Key:          "paris.jpeg",
+						UploadID:     "VXBsb2FkIElEIGZvciBlbHZpbmcncyBteS1tb3ZpZS5tMnRzIHVwbG9hZA",
+						StorageClass: "STANDARD",
+						Initiated:    time.Date(2021, 11, 10, 20, 48, 33, 0, time.UTC),
 					},
 					{
-						UploadID: "YW55IGlkZWEgd2h5IGVsdmluZydzIHVwbG9hZCBmYWlsZWQ",
+						Key:          "tokyo.jpeg",
+						UploadID:     "YW55IGlkZWEgd2h5IGVsdmluZydzIHVwbG9hZCBmYWlsZWQ",
+						StorageClass: "STANDARD",
+						Initiated:    time.Date(2021, 11, 10, 20, 49, 33, 0, time.UTC),
 					},
 				},
 			},

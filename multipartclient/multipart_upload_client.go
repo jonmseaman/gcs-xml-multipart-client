@@ -238,19 +238,24 @@ type ListMultipartUploadsRequest struct {
 
 // TODO: Support headers
 type ListUpload struct {
-	XMLName  xml.Name `xml:"Upload"`
-	UploadID string   `xml:"UploadId"`
+	XMLName      xml.Name  `xml:"Upload"`
+	Key          string    `xml:"Key"`
+	UploadID     string    `xml:"UploadId"`
+	StorageClass string    `xml:"StorageClass"`
+	Initiated    time.Time `xml:"Initiated"`
 }
 
-// TODO: Support response body elements:
-// - KeyMarker
-// - UploadIdMarker
-// - NextKeyMarker
-// - etc
-// - https://cloud.google.com/storage/docs/xml-api/get-bucket-uploads
+// https://cloud.google.com/storage/docs/xml-api/get-bucket-uploads
 type ListMultipartUploadsResult struct {
-	XMLName xml.Name     `xml:"ListMultipartUploadsResult"`
-	Uploads []ListUpload `xml:"Upload"`
+	XMLName            xml.Name     `xml:"ListMultipartUploadsResult"`
+	Bucket             string       `xml:"Bucket"`
+	KeyMarker          string       `xml:"KeyMarker"`
+	UploadIdMarker     string       `xml:"UploadIdMarker"`
+	NextKeyMarker      string       `xml:"NextKeyMarker"`
+	NextUploadIdMarker string       `xml:"NextUploadIdMarker"`
+	MaxUploads         int          `xml:"MaxUploads"`
+	IsTruncated        bool         `xml:"IsTruncated"`
+	Uploads            []ListUpload `xml:"Upload"`
 }
 
 // List Multipart Uploads
