@@ -291,20 +291,35 @@ func (mpuc *MultipartClient) ListMultipartUploads(ctx context.Context, req *List
 }
 
 type ListObjectPartsRequest struct {
-	Bucket   string
-	Key      string
-	UploadID string
+	Bucket           string
+	Key              string
+	UploadID         string
+	MaxParts         int
+	PartNumberMarker int
+}
+
+type ListObjectPartsResultPart struct {
+	XMLName    xml.Name `xml:"Part"`
+	PartNumber int      `xml:"PartNumber"`
+	Etag       string   `xml:"ETag"`
 }
 
 type ListObjectPartsResult struct {
-	Parts []CompletePart `xml:"Part"`
+	Parts []ListObjectPartsResultPart `xml:"Part"`
 }
 
 // List Object Parts
 // https://cloud.google.com/storage/docs/xml-api/get-object-multipart
 func (mpuc *MultipartClient) ListObjectParts(ctx context.Context, req *ListObjectPartsRequest) (*ListObjectPartsResult, error) {
-	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID)
-	httpReq, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	url := strings.Builder{}
+	url.WriteString(fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID))
+	if req.MaxParts > 0 {
+		url.WriteString(fmt.Sprintf("&max-parts=%d", req.MaxParts))
+	}
+	if req.PartNumberMarker > 0 {
+		url.WriteString(fmt.Sprintf("&part-number-marker=%d", req.PartNumberMarker))
+	}
+	httpReq, err := http.NewRequest(http.MethodGet, url.String(), http.NoBody)
 	if err != nil {
 		return nil, err
 	}

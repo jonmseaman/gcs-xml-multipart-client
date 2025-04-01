@@ -548,12 +548,14 @@ func TestListObjectParts(t *testing.T) {
 
 			name: "Successful request",
 			req: &ListObjectPartsRequest{
-				Bucket:   "test-bucket",
-				Key:      "object.txt",
-				UploadID: "test-upload-id",
+				Bucket:           "test-bucket",
+				Key:              "object.txt",
+				UploadID:         "test-upload-id",
+				MaxParts:         2,
+				PartNumberMarker: 1,
 			},
 
-			wantHttpReq: "GET /test-bucket/object.txt?uploadId=test-upload-id HTTP/1.1\n" +
+			wantHttpReq: "GET /test-bucket/object.txt?uploadId=test-upload-id&max-parts=2&part-number-marker=1 HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
 				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n",
 			httpResp: &http.Response{
@@ -561,21 +563,37 @@ func TestListObjectParts(t *testing.T) {
 				StatusCode: http.StatusOK,
 				Body: toBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
 					"<ListPartsResult>\n" +
+					"  <Bucket>test-bucket</Bucket>\n" +
+					"  <Key>object.txt</Key>\n" +
+					"  <UploadId>test-upload-id</UploadId>\n" +
+					"  <StorageClass>STANDARD</StorageClass>\n" +
+					"  <PartNumberMarker>1</PartNumberMarker>\n" +
+					"  <NextPartNumberMarker>2</NextPartNumberMarker>\n" +
+					"  <MaxParts>2</MaxParts>\n" +
+					"  <IsTruncated>true</IsTruncated>\n" +
 					"  <Part>\n" +
 					"    <PartNumber>1</PartNumber>\n" +
+					"    <LastModified>2021-11-10T20:48:33.000Z</LastModified>\n" +
+					"    <ETag>etagpart1</ETag>\n" +
+					"    <Size>1024</Size>\n" +
 					"  </Part>\n" +
 					"  <Part>\n" +
 					"    <PartNumber>2</PartNumber>\n" +
+					"    <LastModified>2021-11-10T20:48:33.000Z</LastModified>\n" +
+					"    <ETag>etagpart2</ETag>\n" +
+					"    <Size>1024</Size>\n" +
 					"  </Part>\n" +
 					"</ListPartsResult>"),
 			},
 			wantResult: &ListObjectPartsResult{
-				Parts: []CompletePart{
+				Parts: []ListObjectPartsResultPart{
 					{
 						PartNumber: 1,
+						Etag:       "etagpart1",
 					},
 					{
 						PartNumber: 2,
+						Etag:       "etagpart2",
 					},
 				},
 			},
@@ -604,7 +622,7 @@ func TestListObjectParts(t *testing.T) {
 
 			// Verify response.
 			opts := []cmp.Option{
-				cmpopts.IgnoreFields(CompletePart{}, "XMLName"),
+				cmpopts.IgnoreFields(ListObjectPartsResultPart{}, "XMLName"),
 			}
 			if diff := cmp.Diff(tc.wantResult, result, opts...); diff != "" {
 				t.Errorf("unexpected diff for result: (-want, +got):\n%s", diff)
