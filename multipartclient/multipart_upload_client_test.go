@@ -8,6 +8,7 @@ import (
 	"net/http/httputil"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -48,6 +49,15 @@ func (mt *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return mt.respondWithHttp, mt.respondWithErr
 }
 
+func newFake(hc *http.Client) *MultipartClient {
+	c := New(hc)
+	c.now = func() time.Time {
+		return time.Unix(0, 0)
+	}
+
+	return c
+}
+
 func TestInititateMultipartUploadRequests(t *testing.T) {
 	tests := []struct {
 		req         *InitiateMultipartUploadRequest
@@ -59,7 +69,9 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 				Key:    "file1.txt",
 			},
 			wantHttpReq: "POST /bucket1/file1.txt?uploads HTTP/1.1\n" +
-				"Host: storage.googleapis.com\n\n",
+				"Host: storage.googleapis.com\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
+				"\n",
 		},
 		{
 			req: &InitiateMultipartUploadRequest{
@@ -67,7 +79,9 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 				Key:    "some/file/with/a/path/file1.txt",
 			},
 			wantHttpReq: "POST /bucket1/some/file/with/a/path/file1.txt?uploads HTTP/1.1\n" +
-				"Host: storage.googleapis.com\n\n",
+				"Host: storage.googleapis.com\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
+				"\n",
 		},
 		{
 			req: &InitiateMultipartUploadRequest{
@@ -80,6 +94,7 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 			},
 			wantHttpReq: "POST /bucket1/some/file/with/a/path/file1.txt?uploads HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
 				"X-Goog-Meta-Ctime: Friday\n" +
 				"X-Goog-Meta-Mtime: Saturday\n" +
 				"\n",
@@ -95,7 +110,7 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 		hc := &http.Client{
 			Transport: trans,
 		}
-		mpuc := New(hc)
+		mpuc := newFake(hc)
 		ctx := context.Background()
 		_, err := mpuc.InitiateMultipartUpload(ctx, tc.req)
 		if !strings.Contains(err.Error(), errMock.Error()) {
@@ -153,7 +168,7 @@ func TestInititateMultipartUploadResponse(t *testing.T) {
 		hc := &http.Client{
 			Transport: trans,
 		}
-		mpuc := New(hc)
+		mpuc := newFake(hc)
 		ctx := context.Background()
 		resp, err := mpuc.InitiateMultipartUpload(ctx, req)
 		if err != nil {
@@ -196,7 +211,8 @@ func TestUploadObjectPart(t *testing.T) {
 				Body:       toBody("part contents"),
 			},
 			wantHttpReq: "PUT /bucket1/object.txt?partNumber=2&uploadId=my-upload-id HTTP/1.1\n" +
-				"Host: storage.googleapis.com\n\n" +
+				"Host: storage.googleapis.com\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n" +
 				"part contents",
 			httpResp: &http.Response{
 				Status:     http.StatusText(http.StatusOK),
@@ -215,7 +231,8 @@ func TestUploadObjectPart(t *testing.T) {
 				Body:       toBody("part contents"),
 			},
 			wantHttpReq: "PUT /bucket1/object.txt?partNumber=2&uploadId=my-upload-id HTTP/1.1\n" +
-				"Host: storage.googleapis.com\n\n" +
+				"Host: storage.googleapis.com\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n" +
 				"part contents",
 			httpResp: &http.Response{
 				Status:     http.StatusText(http.StatusNotFound),
@@ -236,7 +253,7 @@ func TestUploadObjectPart(t *testing.T) {
 			hc := &http.Client{
 				Transport: trans,
 			}
-			mpuc := New(hc)
+			mpuc := newFake(hc)
 			ctx := context.Background()
 			err := mpuc.UploadObjectPart(ctx, tc.req)
 
@@ -287,6 +304,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 			wantHttpReq: "POST /test-bucket/object.txt?uploadId=test-upload-id HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
 				"ContentLength: 206\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
 				"\n" +
 				"<CompleteMultipartUpload>\n" +
 				"  <Part>\n" +
@@ -317,7 +335,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 			hc := &http.Client{
 				Transport: trans,
 			}
-			mpuc := New(hc)
+			mpuc := newFake(hc)
 			ctx := context.Background()
 			result, err := mpuc.CompleteMultipartUpload(ctx, tc.req)
 
@@ -366,7 +384,8 @@ func TestAbortMultipartUploads(t *testing.T) {
 				UploadID: "my-upload-id",
 			},
 			wantHttpReq: "DELETE /bucket1/file1.txt?uploadId=my-upload-id HTTP/1.1\n" +
-				"Host: storage.googleapis.com\n\n",
+				"Host: storage.googleapis.com\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n",
 			httpResp:   success,
 			wantResult: nil,
 		},
@@ -378,7 +397,8 @@ func TestAbortMultipartUploads(t *testing.T) {
 				UploadID: "my-upload-id",
 			},
 			wantHttpReq: "DELETE /bucket1/some/file/with/a/path/file1.txt?uploadId=my-upload-id HTTP/1.1\n" +
-				"Host: storage.googleapis.com\n\n",
+				"Host: storage.googleapis.com\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n",
 			httpResp:   notFound,
 			wantResult: errors.New("Not Found"),
 		},
@@ -394,7 +414,7 @@ func TestAbortMultipartUploads(t *testing.T) {
 			hc := &http.Client{
 				Transport: trans,
 			}
-			mpuc := New(hc)
+			mpuc := newFake(hc)
 			ctx := context.Background()
 			err := mpuc.AbortMultipartUpload(ctx, tc.req)
 
@@ -427,7 +447,8 @@ func TestListMultipartUploads(t *testing.T) {
 				Bucket: "bucket1",
 			},
 			wantHttpReq: "GET /bucket1/?uploads HTTP/1.1\n" +
-				"Host: storage.googleapis.com\n\n",
+				"Host: storage.googleapis.com\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n",
 			httpResp: &http.Response{
 				Status:     http.StatusText(http.StatusOK),
 				StatusCode: http.StatusOK,
@@ -478,7 +499,7 @@ func TestListMultipartUploads(t *testing.T) {
 			hc := &http.Client{
 				Transport: trans,
 			}
-			mpuc := New(hc)
+			mpuc := newFake(hc)
 			ctx := context.Background()
 			listResult, err := mpuc.ListMultipartUploads(ctx, tc.req)
 
@@ -522,7 +543,8 @@ func TestListObjectParts(t *testing.T) {
 			},
 
 			wantHttpReq: "GET /test-bucket/object.txt?uploadId=test-upload-id HTTP/1.1\n" +
-				"Host: storage.googleapis.com\n\n",
+				"Host: storage.googleapis.com\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n",
 			httpResp: &http.Response{
 				Status:     http.StatusText(http.StatusOK),
 				StatusCode: http.StatusOK,
@@ -560,7 +582,7 @@ func TestListObjectParts(t *testing.T) {
 			hc := &http.Client{
 				Transport: trans,
 			}
-			mpuc := New(hc)
+			mpuc := newFake(hc)
 			ctx := context.Background()
 			result, err := mpuc.ListObjectParts(ctx, tc.req)
 

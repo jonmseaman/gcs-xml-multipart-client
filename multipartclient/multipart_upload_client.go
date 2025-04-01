@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"google.golang.org/api/googleapi"
 )
@@ -15,13 +16,15 @@ import (
 // Client for using GCS XML Multipart API:
 // https://cloud.google.com/storage/docs/multipart-uploads
 type MultipartClient struct {
-	hc *http.Client
+	hc  *http.Client
+	now func() time.Time
 }
 
 // Create a multipart client that uses the specified http.Client.
 func New(hc *http.Client) *MultipartClient {
 	return &MultipartClient{
-		hc: hc,
+		hc:  hc,
+		now: time.Now,
 	}
 }
 
@@ -69,6 +72,8 @@ func (mpuc *MultipartClient) InitiateMultipartUpload(ctx context.Context, req *I
 	if err != nil {
 		return nil, err
 	}
+	// Date is a required header.
+	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
 
 	// Add custom metadata:
 	for key, value := range req.CustomMetadata {
@@ -114,6 +119,8 @@ func (mpuc *MultipartClient) UploadObjectPart(ctx context.Context, req *UploadOb
 	if err != nil {
 		return err
 	}
+	// Date is a required header.
+	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)
@@ -178,6 +185,8 @@ func (mpuc *MultipartClient) CompleteMultipartUpload(ctx context.Context, req *C
 		return nil, err
 	}
 
+	// Date is a required header.
+	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
 	httpReq.Header["ContentLength"] = []string{fmt.Sprint(len(strBody))}
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
@@ -207,6 +216,9 @@ func (mpuc *MultipartClient) AbortMultipartUpload(ctx context.Context, req *Abor
 	if err != nil {
 		return err
 	}
+
+	// Date is a required header.
+	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)
@@ -250,6 +262,9 @@ func (mpuc *MultipartClient) ListMultipartUploads(ctx context.Context, req *List
 		return nil, err
 	}
 
+	// Date is a required header.
+	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
+
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)
 	if err != nil {
@@ -288,6 +303,9 @@ func (mpuc *MultipartClient) ListObjectParts(ctx context.Context, req *ListObjec
 	if err != nil {
 		return nil, err
 	}
+
+	// Date is a required header.
+	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)
