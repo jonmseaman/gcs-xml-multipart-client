@@ -319,8 +319,20 @@ func TestCompleteMultipartUpload(t *testing.T) {
 			httpResp: &http.Response{
 				Status:     http.StatusText(http.StatusOK),
 				StatusCode: http.StatusOK,
+				Body: toBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+					"<CompleteMultipartUploadResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\n" +
+					"  <Location>https://storage.googleapis.com/test-bucket/object.txt</Location>\n" +
+					"  <Bucket>test-bucket</Bucket>\n" +
+					"  <Key>object.txt</Key>\n" +
+					"  <ETag>etag</ETag>\n" +
+					"</CompleteMultipartUploadResult>"),
 			},
-			wantResult:    &CompleteMultipartUploadResult{},
+			wantResult: &CompleteMultipartUploadResult{
+				Location: "https://storage.googleapis.com/test-bucket/object.txt",
+				Bucket:   "test-bucket",
+				Key:      "object.txt",
+				Etag:     "etag",
+			},
 			wantResultErr: nil,
 		},
 	}

@@ -198,7 +198,15 @@ func (mpuc *MultipartClient) CompleteMultipartUpload(ctx context.Context, req *C
 		return nil, err
 	}
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	result := &CompleteMultipartUploadResult{}
+	err = xml.Unmarshal(bodyBytes, result)
+	if err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
