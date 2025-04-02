@@ -115,13 +115,19 @@ type UploadObjectPartRequest struct {
 	Body io.ReadCloser
 }
 
+type UploadObjectPartResult struct {
+	ETag   string
+	CRC32C string
+	MD5    string
+}
+
 // Upload an object part request.
 // https://cloud.google.com/storage/docs/xml-api/put-object-multipart
-func (mpuc *MultipartClient) UploadObjectPart(ctx context.Context, req *UploadObjectPartRequest) error {
+func (mpuc *MultipartClient) UploadObjectPart(ctx context.Context, req *UploadObjectPartRequest) (*UploadObjectPartResult, error) {
 	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?partNumber=%v&uploadId=%s", req.Bucket, req.Key, req.PartNumber, req.UploadID)
 	httpReq, err := http.NewRequest(http.MethodPut, url, req.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Date is a required header.
 	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
@@ -137,13 +143,26 @@ func (mpuc *MultipartClient) UploadObjectPart(ctx context.Context, req *UploadOb
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := checkResponse(resp); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	result := &UploadObjectPartResult{
+		ETag: resp.Header.Get("ETag"),
+	}
+	if resp.Header.Get("X-Goog-Hash") != "" {
+		for _, val := range resp.Header["X-Goog-Hash"] {
+			if strings.HasPrefix(val, "crc32c=") {
+				result.CRC32C = strings.TrimPrefix(val, "crc32c=")
+			}
+			if strings.HasPrefix(val, "md5=") {
+				result.MD5 = strings.TrimPrefix(val, "md5=")
+			}
+		}
+	}
+	return result, nil
 }
 
 type CompletePart struct {

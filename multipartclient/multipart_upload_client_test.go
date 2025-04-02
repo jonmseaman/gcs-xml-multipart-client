@@ -302,7 +302,7 @@ func TestUploadObjectPart(t *testing.T) {
 			}
 			mpuc := newFake(hc)
 			ctx := context.Background()
-			err := mpuc.UploadObjectPart(ctx, tc.req)
+			_, err := mpuc.UploadObjectPart(ctx, tc.req)
 
 			// Verify request.
 			if diff := cmp.Diff(tc.wantHttpReq, trans.recordedHttpReq, strCompareOpt); diff != "" {
@@ -315,6 +315,56 @@ func TestUploadObjectPart(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+func TestUploadObjectPartReturnsHashes(t *testing.T) {
+	req := &UploadObjectPartRequest{
+		Bucket:     "bucket1",
+		Key:        "object.txt",
+		PartNumber: 2,
+		UploadID:   "my-upload-id",
+		Body:       toBody("part contents"),
+	}
+	wantHttpReq := "PUT /bucket1/object.txt?partNumber=2&uploadId=my-upload-id HTTP/1.1\n" +
+		"Host: storage.googleapis.com\n" +
+		"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n" +
+		"part contents"
+	httpResp := &http.Response{
+		Status:     http.StatusText(http.StatusOK),
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Etag":        {"test-etag"},
+			"X-Goog-Hash": {"crc32c=test-crc", "md5=test-md5"},
+		},
+		Body: http.NoBody,
+	}
+
+	trans := &mockTransport{
+		t:               t,
+		respondWithHttp: httpResp,
+		respondWithErr:  nil,
+	}
+	hc := &http.Client{
+		Transport: trans,
+	}
+	mpuc := newFake(hc)
+	ctx := context.Background()
+	result, _ := mpuc.UploadObjectPart(ctx, req)
+
+	// Verify request.
+	if diff := cmp.Diff(wantHttpReq, trans.recordedHttpReq, strCompareOpt); diff != "" {
+		t.Errorf("unexpected diff for http request: (-want, +got):\n%s", diff)
+	}
+
+	if result.ETag != "test-etag" {
+		t.Errorf("unexpected response etag. got %v, want %v", result.ETag, "test-etag")
+	}
+	if result.MD5 != "test-md5" {
+		t.Errorf("unexpected response md5. got %v, want %v", result.MD5, "test-md5")
+	}
+	if result.CRC32C != "test-crc" {
+		t.Errorf("unexpected response crc. got %v, want %v", result.CRC32C, "test-crc")
 	}
 }
 
