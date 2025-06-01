@@ -228,7 +228,7 @@ func (mpuc *MultipartClient) CompleteMultipartUpload(ctx context.Context, req *C
 
 	// Date is a required header.
 	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
-	httpReq.Header["ContentLength"] = []string{fmt.Sprint(len(strBody))}
+	httpReq.Header.Set("Content-Length", fmt.Sprint(len(strBody)))
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)
@@ -407,6 +407,7 @@ func (mpuc *MultipartClient) ListObjectParts(ctx context.Context, req *ListObjec
 
 	// Date is a required header.
 	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
+	httpReq.Header.Set("Content-Length", "0")
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)

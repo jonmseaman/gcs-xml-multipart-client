@@ -405,7 +405,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 
 			wantHttpReq: "POST /test-bucket/object.txt?uploadId=test-upload-id HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
-				"ContentLength: 206\n" +
+				"Content-Length: 206\n" +
 				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
 				"\n" +
 				"<CompleteMultipartUpload>\n" +
@@ -705,6 +705,7 @@ func TestListObjectParts(t *testing.T) {
 
 			wantHttpReq: "GET /test-bucket/object.txt?uploadId=test-upload-id&max-parts=2&part-number-marker=1 HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
+				"Content-Length: 0\n" +
 				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n",
 			httpResp: &http.Response{
 				Status:     http.StatusText(http.StatusOK),
