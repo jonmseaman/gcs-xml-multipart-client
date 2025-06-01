@@ -111,8 +111,9 @@ type UploadObjectPartRequest struct {
 	UploadID   string
 
 	// Headers
-	CRC32C string
-	MD5    string
+	CRC32C        string
+	MD5           string
+	ContentLength int64 // Length of the part data.
 
 	// Object body part contents.
 	Body io.ReadCloser
@@ -134,6 +135,11 @@ func (mpuc *MultipartClient) UploadObjectPart(ctx context.Context, req *UploadOb
 	}
 	// Date is a required header.
 	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
+
+	// Set Content-Length if provided.
+	if req.ContentLength > 0 {
+		httpReq.Header.Set("Content-Length", fmt.Sprintf("%d", req.ContentLength))
+	}
 
 	if req.MD5 != "" {
 		httpReq.Header["Content-MD5"] = []string{req.MD5}

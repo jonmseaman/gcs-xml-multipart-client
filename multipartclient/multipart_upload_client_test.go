@@ -271,15 +271,17 @@ func TestUploadObjectPart(t *testing.T) {
 		{
 			name: "Upload part with crc32c",
 			req: &UploadObjectPartRequest{
-				Bucket:     "bucket1",
-				Key:        "object.txt",
-				PartNumber: 2,
-				UploadID:   "my-upload-id",
-				Body:       toBody("part contents"),
-				CRC32C:     "n03x6A==",
+				Bucket:        "bucket1",
+				Key:           "object.txt",
+				PartNumber:    2,
+				UploadID:      "my-upload-id",
+				Body:          toBody("part contents"),
+				CRC32C:        "n03x6A==",
+				ContentLength: 13, // Length of "part contents"
 			},
 			wantHttpReq: "PUT /bucket1/object.txt?partNumber=2&uploadId=my-upload-id HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
+				"Content-Length: 13\n" +
 				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
 				"X-Goog-Hash: crc32c=n03x6A==\n" +
 				"\n" +
