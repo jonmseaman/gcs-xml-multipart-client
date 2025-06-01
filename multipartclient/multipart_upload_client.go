@@ -53,6 +53,7 @@ type InitiateMultipartUploadRequest struct {
 	Bucket string
 	Key    string
 
+	// Custom metadata
 	CustomMetadata map[string]string
 }
 
@@ -72,8 +73,10 @@ func (mpuc *MultipartClient) InitiateMultipartUpload(ctx context.Context, req *I
 	if err != nil {
 		return nil, err
 	}
-	// Date is a required header.
+
+	// Required headers per documentation
 	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
+	httpReq.Header.Set("Content-Length", "0") // Required: 0 for initiate request
 
 	// Add custom metadata:
 	for key, value := range req.CustomMetadata {

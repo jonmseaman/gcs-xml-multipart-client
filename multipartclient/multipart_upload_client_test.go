@@ -70,6 +70,7 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 			},
 			wantHttpReq: "POST /bucket1/file1.txt?uploads HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
+				"Content-Length: 0\n" +
 				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
 				"\n",
 		},
@@ -80,6 +81,7 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 			},
 			wantHttpReq: "POST /bucket1/some/file/with/a/path/file1.txt?uploads HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
+				"Content-Length: 0\n" +
 				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
 				"\n",
 		},
@@ -94,6 +96,7 @@ func TestInititateMultipartUploadRequests(t *testing.T) {
 			},
 			wantHttpReq: "POST /bucket1/some/file/with/a/path/file1.txt?uploads HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
+				"Content-Length: 0\n" +
 				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n" +
 				"X-Goog-Meta-Ctime: Friday\n" +
 				"X-Goog-Meta-Mtime: Saturday\n" +
