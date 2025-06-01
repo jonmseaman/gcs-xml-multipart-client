@@ -267,6 +267,7 @@ func (mpuc *MultipartClient) AbortMultipartUpload(ctx context.Context, req *Abor
 
 	// Date is a required header.
 	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
+	httpReq.Header.Set("Content-Length", "0")
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)

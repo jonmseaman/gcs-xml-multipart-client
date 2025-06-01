@@ -499,6 +499,7 @@ func TestAbortMultipartUploads(t *testing.T) {
 			},
 			wantHttpReq: "DELETE /bucket1/file1.txt?uploadId=my-upload-id HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
+				"Content-Length: 0\n" +
 				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n",
 			httpResp:   success,
 			wantResult: nil,
@@ -512,6 +513,7 @@ func TestAbortMultipartUploads(t *testing.T) {
 			},
 			wantHttpReq: "DELETE /bucket1/some/file/with/a/path/file1.txt?uploadId=my-upload-id HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
+				"Content-Length: 0\n" +
 				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n",
 			httpResp:   notFound,
 			wantResult: errors.New("Not Found"),
