@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -283,6 +284,12 @@ func (mpuc *MultipartClient) AbortMultipartUpload(ctx context.Context, req *Abor
 
 type ListMultipartUploadsRequest struct {
 	Bucket string
+
+	// Query string parameters for pagination and filtering
+	KeyMarker      string
+	MaxUploads     int
+	Prefix         string
+	UploadIdMarker string
 }
 
 // TODO: Support headers
@@ -310,14 +317,39 @@ type ListMultipartUploadsResult struct {
 // List Multipart Uploads
 // https://cloud.google.com/storage/docs/xml-api/get-bucket-uploads
 func (mpuc *MultipartClient) ListMultipartUploads(ctx context.Context, req *ListMultipartUploadsRequest) (*ListMultipartUploadsResult, error) {
-	url := fmt.Sprintf("https://storage.googleapis.com/%s/?uploads", req.Bucket)
-	httpReq, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	// Build URL with query parameters
+	baseURL := fmt.Sprintf("https://storage.googleapis.com/%s/?uploads", req.Bucket)
+
+	// Build query parameters
+	params := url.Values{}
+
+	if req.KeyMarker != "" {
+		params.Add("key-marker", req.KeyMarker)
+	}
+	if req.MaxUploads > 0 {
+		params.Add("max-uploads", fmt.Sprintf("%d", req.MaxUploads))
+	}
+	if req.Prefix != "" {
+		params.Add("prefix", req.Prefix)
+	}
+	if req.UploadIdMarker != "" {
+		params.Add("upload-id-marker", req.UploadIdMarker)
+	}
+
+	// Construct final URL
+	finalURL := baseURL
+	if len(params) > 0 {
+		finalURL = baseURL + "&" + params.Encode()
+	}
+
+	httpReq, err := http.NewRequest(http.MethodGet, finalURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
 
 	// Date is a required header.
 	httpReq.Header.Set("Date", mpuc.now().UTC().Format(time.RFC1123))
+	httpReq.Header.Set("Content-Length", "0")
 
 	resp, err := mpuc.hc.Do(httpReq.WithContext(ctx))
 	defer googleapi.CloseBody(resp)

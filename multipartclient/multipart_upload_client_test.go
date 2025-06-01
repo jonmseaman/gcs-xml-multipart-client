@@ -564,6 +564,7 @@ func TestListMultipartUploads(t *testing.T) {
 			},
 			wantHttpReq: "GET /bucket1/?uploads HTTP/1.1\n" +
 				"Host: storage.googleapis.com\n" +
+				"Content-Length: 0\n" +
 				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n",
 			httpResp: &http.Response{
 				Status:     http.StatusText(http.StatusOK),
@@ -611,6 +612,37 @@ func TestListMultipartUploads(t *testing.T) {
 						Initiated:    time.Date(2021, 11, 10, 20, 49, 33, 0, time.UTC),
 					},
 				},
+			},
+			wantResultErr: nil,
+		},
+		{
+			name: "List with query parameters",
+			req: &ListMultipartUploadsRequest{
+				Bucket:         "bucket1",
+				KeyMarker:      "photos/",
+				MaxUploads:     10,
+				Prefix:         "docs/",
+				UploadIdMarker: "test-upload-marker",
+			},
+			wantHttpReq: "GET /bucket1/?uploads&key-marker=photos%2F&max-uploads=10&prefix=docs%2F&upload-id-marker=test-upload-marker HTTP/1.1\n" +
+				"Host: storage.googleapis.com\n" +
+				"Content-Length: 0\n" +
+				"Date: Thu, 01 Jan 1970 00:00:00 UTC\n\n",
+			httpResp: &http.Response{
+				Status:     http.StatusText(http.StatusOK),
+				StatusCode: http.StatusOK,
+				Body: toBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+					"<ListMultipartUploadsResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\n" +
+					"  <Bucket>bucket1</Bucket>\n" +
+					"  <MaxUploads>10</MaxUploads>\n" +
+					"  <IsTruncated>false</IsTruncated>\n" +
+					"</ListMultipartUploadsResult>\n"),
+			},
+			wantResult: &ListMultipartUploadsResult{
+				Bucket:      "bucket1",
+				MaxUploads:  10,
+				IsTruncated: false,
+				Uploads:     nil,
 			},
 			wantResultErr: nil,
 		},
