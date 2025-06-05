@@ -17,15 +17,26 @@ import (
 // Client for using GCS XML Multipart API:
 // https://cloud.google.com/storage/docs/multipart-uploads
 type MultipartClient struct {
-	hc  *http.Client
-	now func() time.Time
+	hc      *http.Client
+	now     func() time.Time
+	baseURL string
 }
 
 // Create a multipart client that uses the specified http.Client.
 func New(hc *http.Client) *MultipartClient {
 	return &MultipartClient{
-		hc:  hc,
-		now: time.Now,
+		hc:      hc,
+		now:     time.Now,
+		baseURL: "https://storage.googleapis.com",
+	}
+}
+
+// NewWithBaseURL creates a multipart client with a custom base URL (useful for testing).
+func NewWithBaseURL(hc *http.Client, baseURL string) *MultipartClient {
+	return &MultipartClient{
+		hc:      hc,
+		now:     time.Now,
+		baseURL: baseURL,
 	}
 }
 
@@ -69,7 +80,7 @@ type InitiateMultipartUploadResult struct {
 
 // InitiateMultipartUpload calls the XML Multipart API to Inititate a Multipart Upload.
 func (mpuc *MultipartClient) InitiateMultipartUpload(ctx context.Context, req *InitiateMultipartUploadRequest) (*InitiateMultipartUploadResult, error) {
-	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploads", req.Bucket, req.Key)
+	url := fmt.Sprintf("%s/%s/%s?uploads", mpuc.baseURL, req.Bucket, req.Key)
 	httpReq, err := http.NewRequest("POST", url, http.NoBody)
 	if err != nil {
 		return nil, err
@@ -129,7 +140,7 @@ type UploadObjectPartResult struct {
 // Upload an object part request.
 // https://cloud.google.com/storage/docs/xml-api/put-object-multipart
 func (mpuc *MultipartClient) UploadObjectPart(ctx context.Context, req *UploadObjectPartRequest) (*UploadObjectPartResult, error) {
-	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?partNumber=%v&uploadId=%s", req.Bucket, req.Key, req.PartNumber, req.UploadID)
+	url := fmt.Sprintf("%s/%s/%s?partNumber=%v&uploadId=%s", mpuc.baseURL, req.Bucket, req.Key, req.PartNumber, req.UploadID)
 	httpReq, err := http.NewRequest(http.MethodPut, url, req.Body)
 	if err != nil {
 		return nil, err
@@ -218,7 +229,7 @@ func (mpuc *MultipartClient) CompleteMultipartUpload(ctx context.Context, req *C
 		return nil, err
 	}
 
-	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID)
+	url := fmt.Sprintf("%s/%s/%s?uploadId=%s", mpuc.baseURL, req.Bucket, req.Key, req.UploadID)
 	strBody := xmlBody.String()
 	httpBody := io.NopCloser(strings.NewReader(strBody))
 	httpReq, err := http.NewRequest(http.MethodPost, url, httpBody)
@@ -260,7 +271,7 @@ type AbortMultipartUploadRequest struct {
 // Abort multipart upload.
 // https://cloud.google.com/storage/docs/xml-api/delete-multipart
 func (mpuc *MultipartClient) AbortMultipartUpload(ctx context.Context, req *AbortMultipartUploadRequest) error {
-	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID)
+	url := fmt.Sprintf("%s/%s/%s?uploadId=%s", mpuc.baseURL, req.Bucket, req.Key, req.UploadID)
 	httpReq, err := http.NewRequest("DELETE", url, http.NoBody)
 	if err != nil {
 		return err
@@ -290,6 +301,7 @@ type ListMultipartUploadsRequest struct {
 	MaxUploads     int
 	Prefix         string
 	UploadIdMarker string
+	Delimiter      string
 }
 
 // TODO: Support headers
@@ -301,24 +313,33 @@ type ListUpload struct {
 	Initiated    time.Time `xml:"Initiated"`
 }
 
+// CommonPrefixes represents grouped object name prefixes
+type CommonPrefixes struct {
+	XMLName xml.Name `xml:"CommonPrefixes"`
+	Prefix  string   `xml:"Prefix"`
+}
+
 // https://cloud.google.com/storage/docs/xml-api/get-bucket-uploads
 type ListMultipartUploadsResult struct {
-	XMLName            xml.Name     `xml:"ListMultipartUploadsResult"`
-	Bucket             string       `xml:"Bucket"`
-	KeyMarker          string       `xml:"KeyMarker"`
-	UploadIdMarker     string       `xml:"UploadIdMarker"`
-	NextKeyMarker      string       `xml:"NextKeyMarker"`
-	NextUploadIdMarker string       `xml:"NextUploadIdMarker"`
-	MaxUploads         int          `xml:"MaxUploads"`
-	IsTruncated        bool         `xml:"IsTruncated"`
-	Uploads            []ListUpload `xml:"Upload"`
+	XMLName            xml.Name         `xml:"ListMultipartUploadsResult"`
+	Bucket             string           `xml:"Bucket"`
+	KeyMarker          string           `xml:"KeyMarker"`
+	UploadIdMarker     string           `xml:"UploadIdMarker"`
+	NextKeyMarker      string           `xml:"NextKeyMarker"`
+	NextUploadIdMarker string           `xml:"NextUploadIdMarker"`
+	Delimiter          string           `xml:"Delimiter"`
+	Prefix             string           `xml:"Prefix"`
+	MaxUploads         int              `xml:"MaxUploads"`
+	IsTruncated        bool             `xml:"IsTruncated"`
+	Uploads            []ListUpload     `xml:"Upload"`
+	CommonPrefixes     []CommonPrefixes `xml:"CommonPrefixes"`
 }
 
 // List Multipart Uploads
 // https://cloud.google.com/storage/docs/xml-api/get-bucket-uploads
 func (mpuc *MultipartClient) ListMultipartUploads(ctx context.Context, req *ListMultipartUploadsRequest) (*ListMultipartUploadsResult, error) {
 	// Build URL with query parameters
-	baseURL := fmt.Sprintf("https://storage.googleapis.com/%s/?uploads", req.Bucket)
+	baseURL := fmt.Sprintf("%s/%s/?uploads", mpuc.baseURL, req.Bucket)
 
 	// Build query parameters
 	params := url.Values{}
@@ -334,6 +355,9 @@ func (mpuc *MultipartClient) ListMultipartUploads(ctx context.Context, req *List
 	}
 	if req.UploadIdMarker != "" {
 		params.Add("upload-id-marker", req.UploadIdMarker)
+	}
+	if req.Delimiter != "" {
+		params.Add("delimiter", req.Delimiter)
 	}
 
 	// Construct final URL
@@ -404,7 +428,7 @@ type ListObjectPartsResult struct {
 // https://cloud.google.com/storage/docs/xml-api/get-object-multipart
 func (mpuc *MultipartClient) ListObjectParts(ctx context.Context, req *ListObjectPartsRequest) (*ListObjectPartsResult, error) {
 	url := strings.Builder{}
-	url.WriteString(fmt.Sprintf("https://storage.googleapis.com/%s/%s?uploadId=%s", req.Bucket, req.Key, req.UploadID))
+	url.WriteString(fmt.Sprintf("%s/%s/%s?uploadId=%s", mpuc.baseURL, req.Bucket, req.Key, req.UploadID))
 	if req.MaxParts > 0 {
 		url.WriteString(fmt.Sprintf("&max-parts=%d", req.MaxParts))
 	}
