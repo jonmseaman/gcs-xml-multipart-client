@@ -380,13 +380,24 @@ type ListObjectPartsRequest struct {
 }
 
 type ListObjectPartsResultPart struct {
-	XMLName    xml.Name `xml:"Part"`
-	PartNumber int      `xml:"PartNumber"`
-	Etag       string   `xml:"ETag"`
+	XMLName      xml.Name  `xml:"Part"`
+	PartNumber   int       `xml:"PartNumber"`
+	LastModified time.Time `xml:"LastModified"`
+	Etag         string    `xml:"ETag"`
+	Size         int64     `xml:"Size"`
 }
 
 type ListObjectPartsResult struct {
-	Parts []ListObjectPartsResultPart `xml:"Part"`
+	XMLName              xml.Name                    `xml:"ListPartsResult"`
+	Bucket               string                      `xml:"Bucket"`
+	Key                  string                      `xml:"Key"`
+	UploadID             string                      `xml:"UploadId"`
+	StorageClass         string                      `xml:"StorageClass"`
+	PartNumberMarker     int                         `xml:"PartNumberMarker"`
+	NextPartNumberMarker int                         `xml:"NextPartNumberMarker"`
+	MaxParts             int                         `xml:"MaxParts"`
+	IsTruncated          bool                        `xml:"IsTruncated"`
+	Parts                []ListObjectPartsResultPart `xml:"Part"`
 }
 
 // List Object Parts

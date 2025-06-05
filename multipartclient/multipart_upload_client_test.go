@@ -735,14 +735,26 @@ func TestListObjectParts(t *testing.T) {
 					"</ListPartsResult>"),
 			},
 			wantResult: &ListObjectPartsResult{
+				Bucket:               "test-bucket",
+				Key:                  "object.txt",
+				UploadID:             "test-upload-id",
+				StorageClass:         "STANDARD",
+				PartNumberMarker:     1,
+				NextPartNumberMarker: 2,
+				MaxParts:             2,
+				IsTruncated:          true,
 				Parts: []ListObjectPartsResultPart{
 					{
-						PartNumber: 1,
-						Etag:       "etagpart1",
+						PartNumber:   1,
+						LastModified: time.Date(2021, 11, 10, 20, 48, 33, 0, time.UTC),
+						Etag:         "etagpart1",
+						Size:         1024,
 					},
 					{
-						PartNumber: 2,
-						Etag:       "etagpart2",
+						PartNumber:   2,
+						LastModified: time.Date(2021, 11, 10, 20, 48, 33, 0, time.UTC),
+						Etag:         "etagpart2",
+						Size:         1024,
 					},
 				},
 			},
@@ -771,6 +783,7 @@ func TestListObjectParts(t *testing.T) {
 
 			// Verify response.
 			opts := []cmp.Option{
+				cmpopts.IgnoreFields(ListObjectPartsResult{}, "XMLName"),
 				cmpopts.IgnoreFields(ListObjectPartsResultPart{}, "XMLName"),
 			}
 			if diff := cmp.Diff(tc.wantResult, result, opts...); diff != "" {
